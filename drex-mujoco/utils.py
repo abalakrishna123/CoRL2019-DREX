@@ -47,7 +47,7 @@ class PPO2Agent(object):
 
                 if env_type == 'atari':
                     policy = build_policy(env,'cnn')
-                elif env_type in ['mujoco','robosuite']:
+                elif env_type in ['mujoco','robosuite', 'custom_type']:
                     policy = build_policy(env,'mlp')
                 else:
                     assert False,' not supported env_type'

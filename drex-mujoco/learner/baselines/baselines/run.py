@@ -14,6 +14,11 @@ from baselines import logger
 from importlib import import_module
 
 from baselines.common.vec_env.vec_normalize import VecNormalize
+from gym.envs.registration import register
+
+register(
+    id='PointBot-v0',
+    entry_point='envs.pointbot:PointBot')
 
 try:
     from mpi4py import MPI
@@ -60,6 +65,10 @@ _game_envs['retro'] = {
 
 _game_envs['robosuite'] = {
     'SawyerReach'
+}
+
+_game_envs['custom_type'] = {
+    'PointBot-v0'
 }
 
 

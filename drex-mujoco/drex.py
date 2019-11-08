@@ -13,17 +13,25 @@ import gym
 
 from bc_noise_dataset import BCNoisePreferenceDataset
 from utils import RewardNet, Model
+from gym.envs.registration import register
+
+register(
+    id='PointBot-v0',
+    entry_point='envs.pointbot:PointBot')
 
 def train_reward(args):
     # set random seed
     np.random.seed(args.seed)
     tf.random.set_random_seed(args.seed)
 
-    log_dir = Path(args.log_dir)/'trex'
+    if not args.learned_noise:
+        log_dir = Path(args.log_dir)/'trex'
+    else:
+        log_dir = Path(args.log_dir)/'trex_learned_noise'
     log_dir.mkdir(parents=True,exist_ok='temp' in args.log_dir)
 
     with open(str(log_dir/'args.txt'),'w') as f:
-        f.write( str(args) )
+        f.write( str(args) )\
 
     env = gym.make(args.env_id)
 
@@ -109,12 +117,21 @@ def eval_reward(args):
         with sess.as_default():
             return np.sum([model.get_reward(obs,acs) for model in models]) / len(models)
 
-    seen = [1] * len(seen_trajs) + [0] * len(unseen_trajs) + [2] * len(bc_trajs)
-    gt_returns, pred_returns = [], []
+    if args.unseen_trajs:
+        seen = [1] * len(seen_trajs) + [0] * len(unseen_trajs) + [2] * len(bc_trajs)
+        gt_returns, pred_returns = [], []
 
-    for obs,actions,rewards in seen_trajs+unseen_trajs+bc_trajs:
-        gt_returns.append(np.sum(rewards))
-        pred_returns.append(_get_return(obs,actions))
+        for obs,actions,rewards in seen_trajs+unseen_trajs+bc_trajs:
+            gt_returns.append(np.sum(rewards))
+            pred_returns.append(_get_return(obs,actions))
+    else:
+        seen = [1] * len(seen_trajs) + [2] * len(bc_trajs)
+        gt_returns, pred_returns = [], []
+
+        for obs,actions,rewards in seen_trajs+bc_trajs:
+            gt_returns.append(np.sum(rewards))
+            pred_returns.append(_get_return(obs,actions))
+
     sess.close()
 
     # Draw Result
@@ -190,10 +207,19 @@ def train_rl(args):
     N.nvmlInit()
     ngpu = N.nvmlDeviceGetCount()
 
-    log_dir = Path(args.log_dir)/'rl'
+    if not args.learned_noise:
+        log_dir = Path(args.log_dir)/'rl'
+    else:
+        log_dir = Path(args.log_dir)/'rl_learned_noise'
+
     log_dir.mkdir(parents=True,exist_ok='temp' in args.log_dir)
 
     model_dir = os.path.join(args.log_dir,'trex')
+
+    if not args.learned_noise:
+        model_dir = os.path.join(args.log_dir,'trex')
+    else:
+        model_dir = os.path.join(args.log_dir,'trex_learned_noise')
 
     kwargs = {
         "model_dir":os.path.abspath(model_dir),
@@ -247,9 +273,18 @@ def eval_rl(args):
             V.append(np.sum(R))
         return V
 
-    with open(os.path.join(args.log_dir,'rl_results.txt'),'w') as f:
+    if not args.learned_noise:
+        res_file_name = 'rl_results.txt'
+    else:
+        res_file_name = 'rl_results_learned_noise.txt'
+
+    with open(os.path.join(args.log_dir,res_file_name),'w') as f:
         # Load T-REX learned agent
-        agents_dir = Path(os.path.abspath(os.path.join(args.log_dir,'rl')))
+
+        if not args.learned_noise:
+            agents_dir = Path(os.path.abspath(os.path.join(args.log_dir,'rl')))
+        else:
+            agents_dir = Path(os.path.abspath(os.path.join(args.log_dir,'rl_learned_noise')))
 
         trained_steps = sorted(list(set([path.name for path in agents_dir.glob('run_*/checkpoints/?????')])))
         for step in trained_steps[::-1]:
@@ -278,6 +313,7 @@ if __name__ == "__main__":
     parser.add_argument('--mode', default='train_reward',choices=['all','train_reward','eval_reward','train_rl','eval_rl'])
     # Args for T-REX
     ## Dataset setting
+    parser.add_argument('--learned_noise', default=True)
     parser.add_argument('--noise_injected_trajs', default='')
     parser.add_argument('--unseen_trajs', default='', help='used for evaluation only')
     parser.add_argument('--bc_trajs', default='', help='used for evaluation only')
